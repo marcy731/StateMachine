@@ -27,15 +27,15 @@ final class StateMachineTests: XCTestCase {
     
     let transitions: [Transition<State, Event, SideEffect>] = [
         // from State.stopped
-        .init(from: .stopped, on: .play, to: .playing, with: .logPlay),
+        .init(from: .stopped, to: .playing, on: .play, with: .logPlay),
         
         // from State.playing
-        .init(from: .playing, on: .pause, to: .paused, with: .logPause),
-        .init(from: .playing, on: .stop, to: .stopped, with: .logStop),
+        .init(from: .playing, to: .paused, on: .pause, with: .logPause),
+        .init(from: .playing, to: .stopped, on: .stop, with: .logStop),
         
         // from State.
-        .init(from: .paused, on: .play, to: .playing, with: .logPlay),
-        .init(from: .paused, on: .stop, to: .stopped, with: .logStop),
+        .init(from: .paused, to: .playing, on: .play, with: .logPlay),
+        .init(from: .paused, to: .stopped, on: .stop, with: .logStop),
     ]
 
     
