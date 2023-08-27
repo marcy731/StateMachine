@@ -4,40 +4,73 @@ import StateMachine
 
 protocol WebViewModelProtocol {
     var showAlertSubject: PassthroughSubject<String, Never> { get }
-    var purgeLoginSessionSubject: PassthroughSubject<Void, Never> { get }
-    func apply(on event: Event)
+    var logoutSubject: PassthroughSubject<Void, Never> { get }
+    func apply(on event: WebViewModel.Event)
 }
 
 @MainActor
 final class WebViewModel {
-    private(set) var showAlertSubject = PassthroughSubject<String, Never>()
-    private(set) var purgeLoginSessionSubject = PassthroughSubject<Void, Never>()
+    enum State: StateHashable {
+        case initial                // 初期State
+        case displayingTopPage      // トップページ表示中
+        case displayingLoginPage    // ログインページ表示中
+        case displayingMyPage       // マイページ表示中
+        case processingEcLogin      // ECログイン処理中
+        case processingAppLogin     // APPログイン処理中
+        case processingExit         // 退会処理中
+    }
+    
+    enum Event: EventHashable {
+        case topPageLoadCompleted   // トップページ読み込み完了
+        case loginPageLoadCompleted // ログインページ読み込み完了
+        case myPageLoadCompleted    // マイページ読み込み完了
+        case loginButtonTapped      // ログインボタン押下
+        case exitButtonTapped       // 退会ボタン押下
+        case logoutButtonTapped     // ログアウトボタン押下
+        case loginAPISucceeded      // ログインAPI成功
+        case loginAPIFailed         // ログインAPI失敗
+    }
+    
+    enum SideEffect: SideEffectHashable {
+        case showLoginSuccessAlert  // ログイン成功アラート表示
+        case showLoginErrorAlert    // ログインエラーアラート表示
+        case triggerLoginAPI        // ログインAPI実行
+        case logout                 // ログアウト処理（ログインセッション破棄）
+    }
 
     private var stateMachine: StateMachine<State, Event, SideEffect>!
     private let transitions: [Transition<State, Event, SideEffect>] = [
-        // From State.notLoggedIn
-        .init(from: .notLoggedIn, to: .displayingTopPage, on: .topPageLoadCompleted),
+        .init(from: .initial,             to: .displayingTopPage,     on: .topPageLoadCompleted),
+        .init(from: .initial,             to: .displayingLoginPage,   on: .loginPageLoadCompleted),
+        .init(from: .initial,             to: .displayingMyPage,      on: .myPageLoadCompleted),
         
-        // From State.displayingTopPage
-        .init(from: .displayingTopPage, to: .displayingTopPage, on: .topPageLoadCompleted),
-        .init(from: .displayingTopPage, to: .displayingLoginPage, on: .loginPageLoadCompleted),
+        .init(from: .displayingTopPage,   to: .displayingTopPage,     on: .topPageLoadCompleted),
+        .init(from: .displayingTopPage,   to: .displayingLoginPage,   on: .loginPageLoadCompleted),
+        .init(from: .displayingTopPage,   to: .displayingMyPage,      on: .myPageLoadCompleted),
+        .init(from: .displayingTopPage,   to: .displayingTopPage,     on: .logoutButtonTapped,      with: .logout),
         
-        // From State.displayingLoginPage
-        .init(from: .displayingLoginPage, to: .displayingTopPage, on: .topPageLoadCompleted),
-        .init(from: .displayingLoginPage, to: .processingLogin, on: .loginButtonTapped),
+        .init(from: .displayingLoginPage, to: .displayingTopPage,     on: .topPageLoadCompleted),
+        .init(from: .displayingLoginPage, to: .processingEcLogin,     on: .loginButtonTapped),
         
-        // From State.processingLogin
-        .init(from: .processingLogin, to: .processingLogin, on: .loginButtonTapped),
-        .init(from: .processingLogin, to: .displayingLoginPage, on: .loginPageLoadCompleted, with: .displayLoginErrorAlert),
-        .init(from: .processingLogin, to: .loggedInToEC, on: .topPageLoadCompleted, with: .triggerLoginAPI),
+        .init(from: .processingEcLogin,   to: .processingEcLogin,     on: .loginButtonTapped),
+        .init(from: .processingEcLogin,   to: .displayingLoginPage,   on: .loginPageLoadCompleted,  with: .showLoginErrorAlert),
+        .init(from: .processingEcLogin,   to: .processingAppLogin,    on: .topPageLoadCompleted,    with: .triggerLoginAPI),
         
-        // from State.loggedInToEC
-        .init(from: .loggedInToEC, to: .loggedInToApp, on: .loginAPISucceeded, with: .displayLoginSuccessAlert),
-        .init(from: .loggedInToEC, to: .displayingTopPage, on: .loginAPIFailed, with: .purgeLoginSession),
+        .init(from: .processingAppLogin,  to: .displayingTopPage,     on: .loginAPISucceeded,       with: .showLoginSuccessAlert),
+        .init(from: .processingAppLogin,  to: .displayingTopPage,     on: .loginAPIFailed,          with: .logout),
+        
+        .init(from: .displayingMyPage,    to: .processingExit,        on: .exitButtonTapped),
+        .init(from: .displayingMyPage,    to: .displayingTopPage,     on: .logoutButtonTapped,      with: .logout),
+        
+        .init(from: .processingExit,      to: .displayingMyPage,      on: .myPageLoadCompleted),
+        .init(from: .processingExit,      to: .displayingTopPage,     on: .topPageLoadCompleted,    with: .logout),
     ]
     
+    private(set) var showAlertSubject = PassthroughSubject<String, Never>()
+    private(set) var logoutSubject = PassthroughSubject<Void, Never>()
+    
     init() {
-        self.stateMachine = StateMachine(initialState: .notLoggedIn, transitions: transitions) { [weak self] result in
+        self.stateMachine = StateMachine(initialState: .initial, transitions: transitions) { [weak self] result in
             guard let self else { return }
 
             if case .failure(let error) = result, case .undefinedTransition = error {
@@ -49,16 +82,16 @@ final class WebViewModel {
 
                 if let sideEffect = transition.sideEffect {
                     switch sideEffect {
-                    case .displayLoginSuccessAlert:
+                    case .showLoginSuccessAlert:
                         let message = "Login Success"
                         showAlert(message)
-                    case .displayLoginErrorAlert:
+                    case .showLoginErrorAlert:
                         let message = "Login Error"
                         showAlert(message)
                     case .triggerLoginAPI:
                         login()
-                    case .purgeLoginSession:
-                        purgeLoginSession()
+                    case .logout:
+                        logout()
                     }
                 }
             }
@@ -85,31 +118,8 @@ private extension WebViewModel {
         showAlertSubject.send(message)
     }
     
-    @MainActor func purgeLoginSession() {
-        purgeLoginSessionSubject.send(())
+    @MainActor func logout() {
+        logoutSubject.send(())
     }
 }
 
-enum State: StateHashable {
-    case notLoggedIn            // 未ログイン
-    case displayingTopPage      // トップページ表示中
-    case displayingLoginPage    // ログインページ表示中
-    case processingLogin        // ログイン処理中
-    case loggedInToEC           // ECサイトログイン済
-    case loggedInToApp          // Appログイン済
-}
-
-enum Event: EventHashable {
-    case topPageLoadCompleted   // トップページ読み込み完了
-    case loginPageLoadCompleted // ログインページ読み込み完了
-    case loginButtonTapped      // ログインボタン押下
-    case loginAPISucceeded      // ログインAPI成功
-    case loginAPIFailed         // ログインAPI失敗
-}
-
-enum SideEffect: SideEffectHashable {
-    case displayLoginSuccessAlert   // ログイン成功アラート表示
-    case displayLoginErrorAlert     // ログインエラーアラート表示
-    case triggerLoginAPI            // ログインAPI実行
-    case purgeLoginSession          // ログインセッション破棄
-}

@@ -3,12 +3,14 @@ import WebKit
 import Combine
 
 final class WebViewController: UIViewController {
+
     private var webView: WKWebView!
     private let refreshControl = UIRefreshControl()
     private let viewModel: WebViewModelProtocol = WebViewModel()
     private let loadUrl = URL(string: "https://marcy731.stores.jp")
     private var subscriptions = Set<AnyCancellable>()
-    private let messageHandlerName = "accountLogin"
+    private let loginTrigger = "login"
+    private let exitTrigger = "exit"
     private var postLoadingScript: String {
         """
             document.querySelector('.login_form').closest('form')?.addEventListener("submit", () => {
@@ -16,8 +18,14 @@ final class WebViewController: UIViewController {
                 const object = {
                     "email": email,
                 }
-                webkit.messageHandlers.\(messageHandlerName).postMessage(object)
+                webkit.messageHandlers.\(loginTrigger).postMessage(object)
             })
+        
+            if (window.location.pathname === '/mypage/settings/exit') {
+                document.querySelector('.btn_send')?.addEventListener("click", () => {
+                    webkit.messageHandlers.\(exitTrigger).postMessage({})
+                })
+            }
         """
     }
     
@@ -36,9 +44,11 @@ final class WebViewController: UIViewController {
         bind()
         load()
     }
+
 }
 
 private extension WebViewController {
+
     func setupViews() {
         view.backgroundColor = .white
         
@@ -50,7 +60,8 @@ private extension WebViewController {
                 forMainFrameOnly: true
             )
             userContentController.addUserScript(userScript)
-            userContentController.add(self, name: messageHandlerName)
+            userContentController.add(self, name: loginTrigger)
+            userContentController.add(self, name: exitTrigger)
             
             let configuration = WKWebViewConfiguration()
             configuration.processPool = WKProcessPool.shared
@@ -90,10 +101,17 @@ private extension WebViewController {
             }
             .store(in: &subscriptions)
         
-        viewModel.purgeLoginSessionSubject
+        viewModel.logoutSubject
             .sink { [weak self] message in
                 guard let self else { return }
-                purgeLoginSession()
+                logout()
+            }
+            .store(in: &subscriptions)
+        
+        webView.publisher(for: \.url, options: .new)
+            .sink { url in
+                guard let url else { return }
+                print("url: \(url.absoluteString)")
             }
             .store(in: &subscriptions)
     }
@@ -122,8 +140,8 @@ private extension WebViewController {
         present(alert, animated: true)
     }
     
-    func purgeLoginSession() {
-        let message = "Purge login session"
+    func logout() {
+        let message = "Logout"
         let alert = UIAlertController(
             title: "",
             message: message,
@@ -134,30 +152,87 @@ private extension WebViewController {
         })
         present(alert, animated: true)
     }
+
 }
 
 // MARK: WKNavigationDelegate
 extension WebViewController: WKNavigationDelegate {
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard let url = navigationAction.request.url else {
+            decisionHandler(.cancel)
+            return
+        }
+        
+        if url.path == "/logout" {
+            viewModel.apply(on: .logoutButtonTapped)
+        }
+        
+        decisionHandler(.allow)
+    }
+
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if webView.url?.path() == "/" {
             viewModel.apply(on: .topPageLoadCompleted)
         } else if webView.url?.path() == "/login" {
             viewModel.apply(on: .loginPageLoadCompleted)
+        } else if webView.url?.path() == "/mypage" {
+            viewModel.apply(on: .myPageLoadCompleted)
         }
     }
+
 }
 
 // MARK: WKUIDelegate
 extension WebViewController: WKUIDelegate {
+
+    func webView(_: WKWebView, createWebViewWith _: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures _: WKWindowFeatures) -> WKWebView? {
+        if navigationAction.targetFrame == nil {
+            webView.load(navigationAction.request)
+        }
+        return nil
+    }
+    
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        let alert = UIAlertController(
+            title: "",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(.init(title: "OK", style: .default) { _ in
+            completionHandler(true)
+        })
+        alert.addAction(.init(title: "CANCEL", style: .cancel) { _ in
+            completionHandler(false)
+        })
+        present(alert, animated: true)
+    }
+    
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        let alert = UIAlertController(
+            title: "",
+            message: message,
+            preferredStyle: .alert
+        )
+        alert.addAction(.init(title: "OK", style: .default) { _ in
+            completionHandler()
+        })
+        present(alert, animated: true)
+    }
+
 }
 
 // MARK: WKScriptMessageHandler
 extension WebViewController: WKScriptMessageHandler {
+
     public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        if message.name == messageHandlerName {
+        if message.name == loginTrigger {
             guard let body = message.body as? [String: String] else { return }
-            print(body["email"] ?? "no email")
+            print("email: \(body["email"] ?? "no email")")
             viewModel.apply(on: .loginButtonTapped)
+        } else if message.name == exitTrigger {
+            viewModel.apply(on: .exitButtonTapped)
         }
     }
+
 }
