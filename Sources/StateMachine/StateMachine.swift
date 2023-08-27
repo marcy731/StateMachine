@@ -23,11 +23,11 @@ public struct Transition<S: StateHashable, E: EventHashable, SE: SideEffectHasha
     /// The state from which the transition originates
     public let fromState: S
 
-    /// The event that triggers the transition
-    public let event: E
-    
     /// The state to which the transition leads
     public let toState: S
+
+    /// The event that triggers the transition
+    public let event: E
 
     /// An optional side effect that is associated with this transition
     public let sideEffect: SE?
@@ -35,24 +35,24 @@ public struct Transition<S: StateHashable, E: EventHashable, SE: SideEffectHasha
     /// Initializes a transition
     /// - Parameters:
     ///   - fromState: The starting state
-    ///   - event: The event causing the transition
     ///   - toState: The ending state
-    ///   - sideEffect: An optional side effect of the transition
+    ///   - event: The event causing the transition
+    ///   - with: An optional side effect of the transition
     public init(
         from fromState: S,
-        on event: E,
         to toState: S,
+        on event: E,
         with sideEffect: SE? = nil
     ) {
         self.fromState = fromState
-        self.event = event
         self.toState = toState
+        self.event = event
         self.sideEffect = sideEffect
     }
     
     /// Description for the transition, including the from state, to state, event, and any associated side effect.
     public var description: String {
-        var description = "State.\(fromState) -> Stete.\(toState) on Event.\(event)"
+        var description = "State.\(fromState) -> State.\(toState) on Event.\(event)"
         if let sideEffect {
             description += " with SideEffect.\(sideEffect)"
         }
