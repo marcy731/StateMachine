@@ -27,7 +27,7 @@ Add the following dependency to your `Package.swift` file:
 
 ```swift
 .dependencies = [
-    .package(url: "https://github.com/marcy731/StateMachine.git", from: "0.1.0")
+    .package(url: "https://github.com/marcy731/StateMachine.git", from: "0.2.0")
 ]
 ```
 
