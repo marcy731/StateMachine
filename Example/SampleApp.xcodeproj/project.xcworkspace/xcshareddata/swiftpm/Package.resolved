@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "statemachine",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/marcy731/StateMachine",
+      "state" : {
+        "revision" : "d6649f14c5ec790c3a2700df412472abe348649b",
+        "version" : "0.1.0"
+      }
+    }
+  ],
+  "version" : 2
+}
