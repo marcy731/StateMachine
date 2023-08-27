@@ -64,7 +64,7 @@
 				6F1170B72A9B7C1600BA0172 /* App */,
 				6F1170B52A9B7BCF00BA0172 /* Extensions */,
 				6F1170B82A9B7C2B00BA0172 /* Presentations */,
-				6F1170B62A9B7BF500BA0172 /* Resouces */,
+				6F1170B62A9B7BF500BA0172 /* Resources */,
 			);
 			path = SampleApp;
 			sourceTree = "<group>";
@@ -78,13 +78,13 @@
 			path = Extensions;
 			sourceTree = "<group>";
 		};
-		6F1170B62A9B7BF500BA0172 /* Resouces */ = {
+		6F1170B62A9B7BF500BA0172 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 				6F1170A12A9B567400BA0172 /* Assets.xcassets */,
 				6F1170A32A9B567400BA0172 /* LaunchScreen.storyboard */,
 			);
-			path = Resouces;
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		6F1170B72A9B7C1600BA0172 /* App */ = {
