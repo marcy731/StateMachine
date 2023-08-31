@@ -13,6 +13,19 @@ stateDiagram-v2
     paused --> stopped : stop
 ```
 
+````text
+```mermaid
+stateDiagram-v2
+    stopped --> playing : play
+
+    playing --> paused : pause
+    playing --> stopped : stop
+
+    paused --> playing : play
+    paused --> stopped : stop
+```
+````
+
 ## Features
 
 - **Type-Safe**: States and events are strictly typed through protocols.
